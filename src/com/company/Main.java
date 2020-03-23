@@ -4,18 +4,7 @@ public class Main {
     public static void main(String[] args) {
         int[] numbers = { 8, 3, 2, 5, 4 };
 
-        printNumbers(sortNumbers(numbers));
-    }
-
-    public static int[] sortNumbers(int[] numbers) {
-        if (numbers.length == 1) {
-            return numbers;
-        }
-
-        int[] leftNumbers = sliceNumbers(numbers, 0, numbers.length / 2);
-        int[] rightNumbers = sliceNumbers(numbers, numbers.length / 2, numbers.length);
-
-        return joinSortedNumbers(sortNumbers(leftNumbers), sortNumbers(rightNumbers));
+        printNumbers(new NumbersSorter(numbers).sort());
     }
 
     public static void printNumbers(int[] numbers) {
@@ -25,43 +14,79 @@ public class Main {
         }
         System.out.println("}");
     }
+}
+
+class NumbersSorter {
+    private final int[] _numbers;
+
+    public NumbersSorter(int[] numbers) {
+        _numbers = numbers;
+    }
+
+    public int[] sort() {
+        if (_numbers.length == 1) {
+            return _numbers;
+        }
+
+        NumbersSlicer numbersSlicer = new NumbersSlicer(_numbers);
+        int[] leftNumbers = numbersSlicer.slice(0, _numbers.length / 2);
+        int[] rightNumbers = numbersSlicer.slice(_numbers.length / 2, _numbers.length);
+
+        return new SortedNumbersJoiner(new NumbersSorter(leftNumbers).sort(), new NumbersSorter(rightNumbers).sort()).join();
+    }
+}
+
+class SortedNumbersJoiner {
+    private int[] _leftNumbers;
+    private int[] _rightNumbers;
+
+    public SortedNumbersJoiner(int[] leftNumbers, int[] rightNumbers) {
+        _leftNumbers = leftNumbers;
+        _rightNumbers = rightNumbers;
+    }
+
+    public int[] join() {
+        int[] joinedNumbers = new int[_leftNumbers.length + _rightNumbers.length];
+
+        int index = 0;
+        while (_leftNumbers.length != 0 || _rightNumbers.length != 0) {
+            if (_leftNumbers.length == 0) {
+                joinedNumbers[index] = _rightNumbers[0];
+                // Remove added right number to joined numbers.
+                _rightNumbers = new NumbersSlicer(_rightNumbers).slice(1, _rightNumbers.length);
+            } else if (_rightNumbers.length == 0) {
+                joinedNumbers[index] = _leftNumbers[0];
+                // Remove added left number to joined numbers.
+                _leftNumbers = new NumbersSlicer(_rightNumbers).slice(1, _leftNumbers.length);
+            } else if (_leftNumbers[0] < _rightNumbers[0]) {
+                joinedNumbers[index] = _leftNumbers[0];
+                _leftNumbers = new NumbersSlicer(_leftNumbers).slice(1, _leftNumbers.length);
+            } else {
+                joinedNumbers[index] = _rightNumbers[0];
+                _rightNumbers = new NumbersSlicer(_rightNumbers).slice(1, _rightNumbers.length);
+            }
+            index++;
+        }
+
+        return joinedNumbers;
+    }
+}
+
+class NumbersSlicer {
+    private final int[] _numbers;
+
+    public NumbersSlicer(int[] numbers) {
+        _numbers = numbers;
+    }
 
     // Slice numbers in range [begin, end).
-    public static int[] sliceNumbers(int[] numbers, int begin, int end) {
-        int[] result = new int[end - begin];
+    public int[] slice(int begin, int end) {
+        int[] slicedNumbers = new int[end - begin];
 
         for (int i = begin; i < end; i++) {
-            result[i - begin] = numbers[i];
+            slicedNumbers[i - begin] = _numbers[i];
         }
 
-        return result;
-    }
-
-    public static int[] joinSortedNumbers(int[] leftNumbers, int[] rightNumbers) {
-        return joinSortedNumbers(leftNumbers, rightNumbers, new int[leftNumbers.length + rightNumbers.length], 0);
-    }
-
-    public static int[] joinSortedNumbers(int[] leftNumbers, int[] rightNumbers, int[] joinedNumbers, int index) {
-        if (leftNumbers.length == 0 && rightNumbers.length == 0) {
-            return joinedNumbers;
-        }
-
-        if (leftNumbers.length == 0) {
-            joinedNumbers[index] = rightNumbers[0];
-            // Remove added right number to joined numbers.
-            rightNumbers = sliceNumbers(rightNumbers, 1, rightNumbers.length);
-        } else if (rightNumbers.length == 0) {
-            joinedNumbers[index] = leftNumbers[0];
-            // Remove added left number to joined numbers.
-            leftNumbers = sliceNumbers(leftNumbers, 1, leftNumbers.length);
-        } else if (leftNumbers[0] < rightNumbers[0]) {
-            joinedNumbers[index] = leftNumbers[0];
-            leftNumbers = sliceNumbers(leftNumbers, 1, leftNumbers.length);
-        } else {
-            joinedNumbers[index] = rightNumbers[0];
-            rightNumbers = sliceNumbers(rightNumbers, 1, rightNumbers.length);
-        }
-
-        return joinSortedNumbers(leftNumbers, rightNumbers, joinedNumbers, ++index);
+        return slicedNumbers;
     }
 }
