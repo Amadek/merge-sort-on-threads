@@ -1,10 +1,10 @@
 package com.company;
 
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         int[] numbers = { 8, 3, 2, 5, 4 };
 
-        printNumbers(new NumbersSorter(numbers).sort());
+        printNumbers(new NumbersSorter(numbers, true).sort());
     }
 
     public static void printNumbers(int[] numbers) {
@@ -18,12 +18,14 @@ public class Main {
 
 class NumbersSorter {
     private final int[] _numbers;
+    private final boolean _concurrentMode;
 
-    public NumbersSorter(int[] numbers) {
+    public NumbersSorter(int[] numbers, boolean concurrentMode) {
         _numbers = numbers;
+        _concurrentMode = concurrentMode;
     }
 
-    public int[] sort() {
+    public int[] sort() throws InterruptedException {
         if (_numbers.length == 1) {
             return _numbers;
         }
@@ -32,7 +34,24 @@ class NumbersSorter {
         int[] leftNumbers = numbersSlicer.slice(0, _numbers.length / 2);
         int[] rightNumbers = numbersSlicer.slice(_numbers.length / 2, _numbers.length);
 
-        return new SortedNumbersJoiner(new NumbersSorter(leftNumbers).sort(), new NumbersSorter(rightNumbers).sort()).join();
+        NumbersSorter leftNumbersSorter = new NumbersSorter(leftNumbers, _concurrentMode);
+        NumbersSorter rightNumbersSorter = new NumbersSorter(rightNumbers, _concurrentMode);
+
+        if (_concurrentMode) {
+            NumbersSorterThread leftNumbersSorterThread = new NumbersSorterThread(leftNumbersSorter);
+            NumbersSorterThread rightNumbersSorterThread = new NumbersSorterThread(rightNumbersSorter);
+            leftNumbersSorterThread.start();
+            rightNumbersSorterThread.start();
+            leftNumbersSorterThread.join();
+
+            leftNumbers = leftNumbersSorterThread.getSortedNumbers();
+            rightNumbers = rightNumbersSorterThread.getSortedNumbers();
+        } else {
+            leftNumbers = leftNumbersSorter.sort();
+            rightNumbers = rightNumbersSorter.sort();
+        }
+
+        return new SortedNumbersJoiner(leftNumbers, rightNumbers).join();
     }
 }
 
@@ -88,5 +107,23 @@ class NumbersSlicer {
         }
 
         return slicedNumbers;
+    }
+}
+
+class NumbersSorterThread extends Thread {
+    private final NumbersSorter _numbersSorter;
+    private int[] _sortedNumbers;
+
+    public int[] getSortedNumbers() { return _sortedNumbers; }
+
+    public NumbersSorterThread(NumbersSorter numbersSorter){
+        _numbersSorter = numbersSorter;
+    }
+
+    @Override
+    public void run() {
+        try {
+            _sortedNumbers = _numbersSorter.sort();
+        } catch (InterruptedException ex) { }
     }
 }
