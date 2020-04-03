@@ -1,10 +1,13 @@
 package com.company;
 
+import java.util.Random;
+
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        int[] numbers = { 8, 3, 2, 5, 4 };
+        RandomNumbersGenerator generator = new RandomNumbersGenerator(100, 1, 100);
+        NumbersJoinSorter sorter = new NumbersJoinSorter(generator.generate(), true);
 
-        printNumbers(new NumbersSorter(numbers, true).sort());
+        printNumbers(sorter.sort());
     }
 
     public static void printNumbers(int[] numbers) {
@@ -16,26 +19,61 @@ public class Main {
     }
 }
 
-class NumbersSorter {
+// Generator zbioru liczb pseudolosowych.
+// Losuje zbiór z podanego zakresu.
+class RandomNumbersGenerator {
+    private final int _numbersCount;
+    private final int _minNumber;
+    private final int _maxNumber;
+    private final Random _random = new Random();
+
+    public RandomNumbersGenerator(int numbersCount, int minNumber, int maxNumber) {
+        _numbersCount = numbersCount;
+        _minNumber = minNumber;
+        _maxNumber = maxNumber;
+    }
+
+    public int[] generate() {
+        int[] numbers = new int[_numbersCount];
+
+        for (int i = 0; i < _numbersCount; i++) {
+            numbers[i] = _minNumber + _random.nextInt(_maxNumber - _minNumber + 1);
+        }
+
+        return numbers;
+    }
+}
+
+// Interfejs obiektu sortującego liczby.
+interface INumbersSorter {
+    int[] sort() throws InterruptedException;
+}
+
+// Klasa sortowania liczb metodą sortowania przez scalanie.
+// Tworzy i wywołuje samego siebie do momentu aż osiągnie mniej niż 5 elementów.
+// Potem przełącza się na sortowanie przez wstawianie.
+class NumbersJoinSorter implements INumbersSorter {
     private final int[] _numbers;
     private final boolean _concurrentMode;
 
-    public NumbersSorter(int[] numbers, boolean concurrentMode) {
+    public NumbersJoinSorter(int[] numbers, boolean concurrentMode) {
         _numbers = numbers;
         _concurrentMode = concurrentMode;
     }
 
+    @Override
     public int[] sort() throws InterruptedException {
-        if (_numbers.length == 1) {
-            return _numbers;
+        // Dla zbioru co najwyżej 5-elementowego stosujemy sortowanie przez wstawianie.
+        if (_numbers.length <= 5) {
+            return new NumbersInsertionSorter(_numbers).sort();
         }
 
         NumbersSlicer numbersSlicer = new NumbersSlicer(_numbers);
         int[] leftNumbers = numbersSlicer.slice(0, _numbers.length / 2);
         int[] rightNumbers = numbersSlicer.slice(_numbers.length / 2, _numbers.length);
 
-        NumbersSorter leftNumbersSorter = new NumbersSorter(leftNumbers, _concurrentMode);
-        NumbersSorter rightNumbersSorter = new NumbersSorter(rightNumbers, _concurrentMode);
+        INumbersSorter leftNumbersSorter = new NumbersJoinSorter(leftNumbers, _concurrentMode);
+        INumbersSorter rightNumbersSorter = new NumbersJoinSorter(rightNumbers, _concurrentMode);
 
         if (_concurrentMode) {
             NumbersSorterThread leftNumbersSorterThread = new NumbersSorterThread(leftNumbersSorter);
@@ -43,6 +81,7 @@ class NumbersSorter {
             leftNumbersSorterThread.start();
             rightNumbersSorterThread.start();
             leftNumbersSorterThread.join();
+            rightNumbersSorterThread.join();
 
             leftNumbers = leftNumbersSorterThread.getSortedNumbers();
             rightNumbers = rightNumbersSorterThread.getSortedNumbers();
@@ -55,6 +94,41 @@ class NumbersSorter {
     }
 }
 
+// Klasa sortowania liczb metodą sortowania przez wstawianie.
+class NumbersInsertionSorter implements INumbersSorter {
+    private final int[] _numbers;
+
+    public NumbersInsertionSorter(int[] numbers) {
+        _numbers = this.copyNumbers(numbers);
+    }
+
+    @Override
+    public int[] sort() {
+        for (int i = 1; i < _numbers.length; i++) {
+            int j = i;
+            while (j > 0 && _numbers[j - 1] > _numbers[j]) {
+                int buffer =  _numbers[j - 1];
+                _numbers[j - 1] = _numbers[j];
+                _numbers[j] = buffer;
+                j--;
+            }
+        }
+
+        return _numbers;
+    }
+
+    private int[] copyNumbers(int[] numbers) {
+        int[] copiedNumbers = new int[numbers.length];
+
+        for (int i = 0; i < numbers.length; i++) {
+            copiedNumbers[i] = numbers[i];
+        }
+
+        return copiedNumbers;
+    }
+}
+
+// Klasa łączenia już posortowanych dwóch zbiorów liczb.
 class SortedNumbersJoiner {
     private int[] _leftNumbers;
     private int[] _rightNumbers;
@@ -76,7 +150,7 @@ class SortedNumbersJoiner {
             } else if (_rightNumbers.length == 0) {
                 joinedNumbers[index] = _leftNumbers[0];
                 // Remove added left number to joined numbers.
-                _leftNumbers = new NumbersSlicer(_rightNumbers).slice(1, _leftNumbers.length);
+                _leftNumbers = new NumbersSlicer(_leftNumbers).slice(1, _leftNumbers.length);
             } else if (_leftNumbers[0] < _rightNumbers[0]) {
                 joinedNumbers[index] = _leftNumbers[0];
                 _leftNumbers = new NumbersSlicer(_leftNumbers).slice(1, _leftNumbers.length);
@@ -91,6 +165,7 @@ class SortedNumbersJoiner {
     }
 }
 
+// Klasa dzielenia zbioru liczb na dwa zbiory.
 class NumbersSlicer {
     private final int[] _numbers;
 
@@ -98,7 +173,7 @@ class NumbersSlicer {
         _numbers = numbers;
     }
 
-    // Slice numbers in range [begin, end).
+    // Dzieli w zakresie [begin, end).
     public int[] slice(int begin, int end) {
         int[] slicedNumbers = new int[end - begin];
 
@@ -110,13 +185,15 @@ class NumbersSlicer {
     }
 }
 
+// Wątek przyjmujące obiekt sortowania liczb.
+// Wywołuje sortującego liczby.
 class NumbersSorterThread extends Thread {
-    private final NumbersSorter _numbersSorter;
+    private final INumbersSorter _numbersSorter;
     private int[] _sortedNumbers;
 
     public int[] getSortedNumbers() { return _sortedNumbers; }
 
-    public NumbersSorterThread(NumbersSorter numbersSorter){
+    public NumbersSorterThread(INumbersSorter numbersSorter){
         _numbersSorter = numbersSorter;
     }
 
